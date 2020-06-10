@@ -6,28 +6,41 @@ const apiURL = `https://www.googleapis.com/youtube/v3/videos?part=contentDetails
 
 let videoIds;
 let idAmount = 0;
+let deletedVids = 0;
 
-const makeRequest = (ids) => {
-    axios.get(`${apiURL}${ids}`).then(response => {
-        console.log(response);
-    });
+function makeRequest(ids) {
+	axios.get(`${apiURL}${ids}`).then(response => {
+		response.data.items.forEach(item => {
+			// TODO calculate time together
+			// Also, have the ability to exclude videos that are > X minutes.
+		})
+	}).catch(function (error) {
+		console.log('ERROR:', error);
+	});
 }
 
 function start() {
+	watchHistory.forEach(vid => {
+		if (vid.titleUrl) {
+			// TODO: see if this works
+			console.log(watchHistory.indexOf(vid) - (watchHistory.length - 1));
 
-    watchHistory.forEach(async vid => {
-        if (vid.titleUrl) {
-            if (idAmount == 50) {
-                await makeRequest(videoIds.slice(0, -1));
-                idAmount = 0;
-                return;
-            }
-            videoIds = videoIds + `${vid.titleUrl.split('=')[1]},`;
-            idAmount++;
-        } else {
-            console.log('this didn\'t have it:', vid);
-        }
-    });
+			if (idAmount == 50 || watchHistory.indexOf(vid) == watchHistory.length - 1) {
+				videoIds = videoIds.replace('undefined', '').slice(0, -1);
+				makeRequest(videoIds);
+				idAmount = 0;
+				videoIds = '';
+				return;
+			}
+
+			vidID = vid.titleUrl.split('=')[1];
+			videoIds += `${vidID},`;
+			idAmount++;
+
+		} else {
+			deletedVids++;
+		}
+	});
 }
 
 
