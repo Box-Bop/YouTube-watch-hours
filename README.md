@@ -1,3 +1,6 @@
+This project takes in YouTube watch history data, and spits out statistical data of the list. <br>
+Since YouTube's API limits queries to 50 video IDs per request, this app breaks the history data into smaller chunks, and makes the necessary requests.
+
 ## Running project
 `npm i && npm start`<br>
 Make a `yt-api-key.js` file which exports your API key:
