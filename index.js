@@ -2,7 +2,6 @@ const axios = require('axios');
 var express = require("express");
 const moment = require('moment');
 
-const watchHistoryTemp = require('../watch-history.json');
 const apiKey = require('./yt-api-key.js');
 
 const apiURL = `https://www.googleapis.com/youtube/v3/videos?part=contentDetails&key=${apiKey.key}&id=`;
@@ -16,8 +15,6 @@ let returnedData = {};
 async function makeRequest(ids) {
 	await axios.get(`${apiURL}${ids}`).then(response => {
 		response.data.items.forEach(item => {
-			totalVidCount++;
-
 			let duration = item.contentDetails.duration.split(/[THMS]/);
 			duration = duration.slice(1, -1); // Removes array elements which RegEX split doesn't remove
 
@@ -35,6 +32,7 @@ async function makeRequest(ids) {
 				excludedVids++;
 				return;
 			}
+			totalVidCount++;
 
 			seconds ? totalSeconds.add(parseInt(seconds), 'seconds') : {};
 			minutes ? totalSeconds.add(parseInt(minutes), 'minutes') : {};
