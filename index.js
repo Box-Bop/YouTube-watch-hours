@@ -107,7 +107,7 @@ app.listen(3000, () => {
 	console.log("Server running on port 3000");
 });
 
-app.post("/send-stats/:limit?", (req, res) => {
+app.post("/send-data/:limit?", (req, res) => {
 	const limitParam = parseInt(req.params.limit);
 	req.params.limit && !isNaN(limitParam) ? excludedMinutes = limitParam : {};
 	start(req.body);
@@ -115,7 +115,7 @@ app.post("/send-stats/:limit?", (req, res) => {
 	res.json({accepted: true, message: 'Your data is being processed. Periodically send a GET request to /get-stats to retrieve processed data.'});
 });
 
-app.get("/get-stats", (req, res) => {
+app.get("/get-data", (req, res) => {
 	Object.keys(returnedData).length != 0 ?
 		res.json({success: true, data: returnedData}) :
 		res.json({success: false, message: 'Not done processsing your data.'});
