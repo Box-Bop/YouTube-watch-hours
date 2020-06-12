@@ -8,13 +8,10 @@ const apiKey = require('./yt-api-key.js');
 const apiURL = `https://www.googleapis.com/youtube/v3/videos?part=contentDetails&key=${apiKey.key}&id=`;
 let excludedMinutes = 0;
 
-let videoIds = '';
-let idAmount = 0;
-
 let totalVidCount = 0;
-let deletedVids = 0;
 let excludedVids = 0;
 let totalSeconds = moment.duration(0, 'seconds');
+let returnedData = {};
 
 async function makeRequest(ids) {
 	await axios.get(`${apiURL}${ids}`).then(response => {
@@ -49,6 +46,11 @@ async function makeRequest(ids) {
 }
 
 async function start(watchHistory) {
+	let videoIds = '';
+	let idAmount = 0;
+	let deletedVids = 0;
+	totalVidCount = 0;
+	excludedVids = 0;
 	for (vid of watchHistory) {
 		if (vid.titleUrl) {
 
@@ -78,10 +80,10 @@ async function start(watchHistory) {
 	const asSeconds = totalSeconds.as('seconds');
 	const average = asSeconds / totalVidCount;
 
-	console.log(`Average video lenght: ${moment.utc(moment.duration(average, 'seconds').as('seconds')).format('HH:mm:ss')}`);
+	console.log(`Average video lenght: ${moment.utc(moment.duration(average, 'seconds').as('milliseconds')).format('HH:mm:ss')}`);
 	console.log(`Amount of videos longer than ${excludedMinutes} minutes: ${excludedVids}\nDeleted videos: ${deletedVids}`);
 
-	return {
+	returnedData = {
 		totalWatchTime: {
 			seconds: timeData.seconds,
 			minutes: timeData.minutes,
@@ -91,7 +93,7 @@ async function start(watchHistory) {
 		},
 		otherStats: {
 			videosWatched: totalVidCount,
-			avgVideoLenght: moment.utc(moment.duration(average, 'seconds').as('seconds')).format('HH:mm:ss'),
+			avgVideoLenght: moment.utc(moment.duration(average, 'seconds').as('milliseconds')).format('HH:mm:ss'),
 			longerThanLimit: excludedVids,
 			deletedVideos: deletedVids
 		},
@@ -99,16 +101,22 @@ async function start(watchHistory) {
 }
 
 var app = express();
-app.use(express.json({ limit: '50mb' })); // lets you get request JSON
+app.use(express.json({ limit: '50mb' })); // lets you get the request's JSON
 
 app.listen(3000, () => {
 	console.log("Server running on port 3000");
 });
 
-app.post("/get-stats/:limit?", async (req, res) => {
-	console.log('started');
+app.post("/send-stats/:limit?", (req, res) => {
 	const limitParam = parseInt(req.params.limit);
 	req.params.limit && !isNaN(limitParam) ? excludedMinutes = limitParam : {};
-	const responseData = await start(req.body);
-	res.send(responseData);
+	start(req.body);
+	res.status(202);
+	res.json({accepted: true, message: 'Your data is being processed. Periodically send a GET request to /get-stats to retrieve processed data.'});
+});
+
+app.get("/get-stats", (req, res) => {
+	Object.keys(returnedData).length != 0 ?
+		res.json({success: true, data: returnedData}) :
+		res.json({success: false, message: 'Not done processsing your data.'});
 });
