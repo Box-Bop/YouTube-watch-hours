@@ -20,7 +20,7 @@
   "homepage": "https://github.com/Box-Bop/YouTube-watch-hours#readme",
   "dependencies": {
     "axios": "^0.19.2",
-    "express": "^4.17.1",
+    "express": "^4.18.2",
     "moment": "^2.26.0"
   }
 }
