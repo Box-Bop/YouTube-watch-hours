@@ -1,0 +1,15 @@
+YT API:
+id
+snippet > publishedAt		Avg (top 95/99 percentile) time from publish to watch
+snippet > channelId		Top channels
+snippet > channelTitle		Top channels
+snippet > title			Could use to see top words
+contentDetails > duration	Avg & total time
+
+OG object:
+time				When is video watched
+
+
+fields=items(id,snippet(publishedAt,channelId,channelTitle,title),contentDetails(duration))
+
+"PT1M"

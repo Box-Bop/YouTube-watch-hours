@@ -1,10 +1,14 @@
 const axios = require('axios');
 var express = require("express");
 const moment = require('moment');
+const fs = require('fs');
 
 const apiKey = require('./yt-api-key.js');
+const filepath = 'retrievedApiData.json';
 
-const apiURL = `https://www.googleapis.com/youtube/v3/videos?part=contentDetails&key=${apiKey.key}&id=`;
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+const apiURL = `https://youtube.googleapis.com/youtube/v3/videos?part=snippet,contentDetails&fields=items(id,snippet(publishedAt,channelId,channelTitle,title),contentDetails(duration))&key=${apiKey.key}&id=`;
 let excludedMinutes = 0;
 
 let totalVidCount = 0;
@@ -12,38 +16,104 @@ let excludedVids = 0;
 let totalSeconds = moment.duration(0, 'seconds');
 let returnedData = {};
 
-async function makeRequest(ids) {
-	await axios.get(`${apiURL}${ids}`).then(response => {
-		response.data.items.forEach(item => {
-			let duration = item.contentDetails.duration.split(/[THMS]/);
-			duration = duration.slice(1, -1); // Removes array elements which RegEX split doesn't remove
+let somethingRandom = 0;
 
-			const seconds = duration[duration.length - 1];
-			const minutes = duration[duration.length - 2] && duration[duration.length - 2];
-			const hours = duration[duration.length - 3] && duration[duration.length - 3];
+somethingRandom.toString();
 
-			const tempTime = moment.duration(0, 'minutes');
+let totalAppendedData = [];
 
-			seconds ? tempTime.add(parseInt(seconds), 'seconds') : {};
-			minutes ? tempTime.add(parseInt(minutes), 'minutes') : {};
-			hours ? tempTime.add(parseInt(hours), 'hours') : {};
+function isoTextToTime(incomingDuration) {
+	const duration = moment.duration(incomingDuration);
 
-			if (excludedMinutes && tempTime.as('minutes') >= excludedMinutes) {
-				excludedVids++;
+	return { seconds: duration.seconds(), minutes: duration.minutes(), hours: duration.hours()}
+}
+
+async function makeRequest(videoIdsAndTime) {
+	await sleep(200);
+	let ids = '';
+	videoIdsAndTime.map(vid => { ids += `${vid.id},`});
+	ids = ids.slice(0, -1); // TODO: MAYBE NOT NEEDED
+
+	return await axios.get(`${apiURL}${ids}`, {headers: ''}).then(response => {
+		if (typeof response.data === 'string') {
+			// response.data = JSON.parse(response.data);
+			console.log('Response is a string, retrying');
+			
+			return false;
+		} 
+		const data = response.data.items;
+
+		const combinedArray = data.reduce((acc, curr) => {
+
+			curr.processedTime = isoTextToTime(curr.contentDetails.duration);
+	
+			acc.push({...curr, ...videoIdsAndTime.find(item => item.id === curr.id)});
+			return acc;
+		}, []);
+
+		//TODO: filestreams should be used instead
+		fs.readFile(filepath, 'utf-8', (err, fileData) => {
+			if (err) {
+				console.error(err);
 				return;
 			}
-			totalVidCount++;
-
-			seconds ? totalSeconds.add(parseInt(seconds), 'seconds') : {};
-			minutes ? totalSeconds.add(parseInt(minutes), 'minutes') : {};
-			hours ? totalSeconds.add(parseInt(hours), 'hours') : {};
+			
+			let jsonData = [];
+			try {
+				jsonData = JSON.parse(fileData);
+			} catch (e) {
+				console.error('Error parsing JSON:', e);
+			}
+			
+			jsonData.push(...combinedArray);
+			
+			const jsonString = JSON.stringify(jsonData);
+			
+			fs.writeFile(filepath, jsonString, 'utf-8', (err) => {
+				if (err) {
+				console.error(err);
+				}
+			});
 		});
+
+		return data;
 	}).catch(function (error) {
-		console.log('ERROR:', error);
+		if (error.code === 'ECONNRESET') {
+			return false;
+		} else {
+			console.log('ERROR:', error);
+
+			return false;
+		}
+	});
+};
+
+async function processAttributes(videos) {
+	videos.forEach(vid => {
+		let duration = vid.contentDetails.duration;
+
+		const { seconds, minutes, hours } = isoTextToTime(duration);
+
+		const tempTime = moment.duration(0, 'minutes');
+
+		seconds ? tempTime.add(seconds, 'seconds') : {};
+		minutes ? tempTime.add(minutes, 'minutes') : {};
+		hours ? tempTime.add(hours, 'hours') : {};
+
+		if (excludedMinutes && tempTime.as('minutes') >= excludedMinutes) {
+			excludedVids++;
+			return;
+		}
+		totalVidCount++;
+
+		seconds ? totalSeconds.add(seconds, 'seconds') : {};
+		minutes ? totalSeconds.add(minutes, 'minutes') : {};
+		hours ? totalSeconds.add(hours, 'hours') : {};
 	});
 }
 
 async function start(watchHistory) {
+	let videoIdsAndTime = [];
 	let videoIds = '';
 	let idAmount = 0;
 	let deletedVids = 0;
@@ -51,19 +121,30 @@ async function start(watchHistory) {
 	excludedVids = 0;
 	for (vid of watchHistory) {
 		if (vid.titleUrl) {
+			
+			vidID = vid.titleUrl.split('=')[1];
+			videoIdsAndTime.push({
+				id: vidID,
+				timeWatched: vid.time
+			});
+			// videoIds += `${vidID},`;
+			idAmount++;
 
 			if (idAmount == 50 || watchHistory.indexOf(vid) == watchHistory.length - 1) {
-				videoIds = videoIds.slice(0, -1);
-				await makeRequest(videoIds);
+				// videoIds = videoIds.slice(0, -1);
+				let videos = false;
+				
+				while (!videos) {
+					videos = await makeRequest(videoIdsAndTime);
+				}
+
+				await processAttributes(videos);
 				console.log('Videos requested:', totalVidCount);
 				idAmount = 0;
-				videoIds = '';
+				// videoIds = '';
+				videoIdsAndTime = [];
 				continue;
 			}
-
-			vidID = vid.titleUrl.split('=')[1];
-			videoIds += `${vidID},`;
-			idAmount++;
 
 		} else {
 			deletedVids++;
@@ -99,7 +180,7 @@ async function start(watchHistory) {
 }
 
 var app = express();
-app.use(express.json({ limit: '50mb' })); // lets you get the request's JSON
+app.use(express.json({ limit: '50mb' })); // Can handle a history of roughly ~100k videos
 
 app.listen(3000, () => {
 	console.log("Server running on port 3000");
